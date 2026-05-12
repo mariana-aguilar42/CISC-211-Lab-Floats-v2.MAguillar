@@ -13,7 +13,7 @@
 .type nameStr,%gnu_unique_object
     
 /*** STUDENTS: Change the next line to your name!  **/
-nameStr: .asciz "Inigo Montoya"  
+nameStr: .asciz "Mariana Aguilar"  
  
 .align
 
@@ -80,7 +80,61 @@ nanValue: .word 0x7FFFFFFF
  .type initVariables,%function
 initVariables:
     /* YOUR initVariables CODE BELOW THIS LINE! Don't forget to follow the calling convention! */
-
+    PUSH {R4-R11, LR}
+    
+    MOV R0, 0 //basically refreshing everything 
+    
+    /*resetting f0 */
+    LDR R1, =f0
+    STR R0, [R1]
+    
+    LDR R1, =sb0
+    STR R0, [R1]
+    
+    LDR R1, =storedExp0
+    STR R0, [R1]
+    
+    LDR R1, =realExp0
+    STR R0, [R1]
+    
+    LDR R1, =mant0
+    STR R0, [R1]
+    
+    /*resetting f1 */ 
+    LDR R1, =f1
+    STR R0, [R1]
+    
+    LDR R1, =sb1
+    STR R0, [R1]
+    
+    LDR R1, =storedExp1
+    STR R0, [R1]
+    
+    LDR R1, =realExp1
+    STR R0, [R1]
+    
+    LDR R1, =mant1
+    STR R0, [R1]
+    
+    /* resetting fMax */
+    LDR R1, =fMax
+    STR R0, [R1]
+    
+    LDR R1, =sbMax
+    STR R0, [R1]
+    
+    LDR R1, =storedExpMax
+    STR R0, [R1]
+    
+    LDR R1, =realExpMax
+    STR R0, [R1]
+    
+    LDR R1, =mantMax
+    STR R0, [R1]
+    
+    
+    POP {R4-R11, LR}
+    MOV PC, LR
     /* YOUR initVariables CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
 
     
@@ -97,7 +151,20 @@ initVariables:
 .type getSignBit,%function
 getSignBit:
     /* YOUR getSignBit CODE BELOW THIS LINE! Don't forget to follow the calling convention! */
+    PUSH {R4-R11, LR}
+    
+    /*get float from r0*/
+    LDR R2, [R0]
+    
+    /*shift right to get sign bit */
+    LSR R2, R2, 31
+    
+    /*store sign (1 = negative, 0 = positive) */
+    STR R2, [R1]
 
+    
+    POP {R4-R11, LR}
+    MOV PC, LR
     /* YOUR getSignBit CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
     
 
@@ -118,6 +185,20 @@ getSignBit:
 .type getExponent,%function
 getExponent:
     /* YOUR getExponent CODE BELOW THIS LINE! Don't forget to follow the calling convention! */
+    PUSH {R4-R11, LR}
+    
+    /*getting float value from r0*/
+    LDR R2, [R0]
+    
+    /*get exponent */
+    LSL R2, R2, 1 /*lsl to drop sign bit*/
+    LSR R2, R2, 24 /*lsr to drop mantissa*/
+    
+    /*storing exponent into r0*/
+    MOV R0, R2 /*stored value*/
+    
+    /*real exponent */
+    SUB R1, R2, 127 /*getting */
     
     /* YOUR getExponent CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
    
@@ -136,7 +217,27 @@ getExponent:
 .type getMantissa,%function
 getMantissa:
     /* YOUR getMantissa CODE BELOW THIS LINE! Don't forget to follow the calling convention! */
+    PUSH {R4-R11, LR}
     
+    /*getting float from address */
+    LDR R2, [R0]
+    
+    
+    LSL R2, R2, 9 /*moving left 9 to drop sign and exponent */
+    
+    LSR R2, R2, 9 /* moving right 9 to move mantissa to lsb*/
+    
+    MOV R0, R2 /* mantissa without the implited 1 bit*/ 
+    
+    /*sets 1 to the left of the mantissa*/
+    MOV R3, 1
+    LSL R3, R3, 23
+    
+    ADD R1, R2, R3 /*mantissa with 1 in bit 23*/
+    
+    
+    POP {R4-R11, LR}
+    MOV PC, LR
     /* YOUR getMantissa CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
    
 
@@ -156,6 +257,39 @@ getMantissa:
 .type asmIsZero,%function
 asmIsZero:
     /* YOUR asmIsZero CODE BELOW THIS LINE! Don't forget to follow the calling convention! */
+    PUSH {R4-R11, LR}
+    
+    LDR R2, [R0] /*getting float*/
+    
+    LSL R3, R2, 1 /*moving the sign bit*/
+    
+    /*checking if the rest is 0*/
+    CMP R3, 0
+    /*if there is a number*/
+    BNE not_zero
+    
+    /*it is a zero*/
+    CMP R2, 0
+    /*positive zero if it was always 0*/
+    BEQ pos_zero
+    /*moving down if not equal*/
+    /*-1 if floating point value is -0*/
+    neg_zero:
+	MOV R0, -1
+	B is_zero
+	
+    /*1 is floating point value is +0*/
+    pos_zero:
+	MOV R0, 1
+	B is_zero
+	
+    /*0 if not a +/- 0 */
+    not_zero:
+	MOV R0, 0
+	
+    is_zero:
+	POP {R4-R11, LR}
+	MOV PC, LR
     
     /* YOUR asmIsZero CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
    
@@ -176,6 +310,43 @@ asmIsZero:
 .type asmIsInf,%function
 asmIsInf:
     /* YOUR asmIsInf CODE BELOW THIS LINE! Don't forget to follow the calling convention! */
+    PUSH {R4-R11, LR}
+    
+    LDR R2, [R0]/*getting float*/
+    
+    LSL R3, R2, 1 /*moving the sign bit off*/
+    
+    LDR R4, =0xFF000000 /*setting an infinity register*/
+    
+    CMP R4, R3
+    BNE not_inf
+    /*not equal is normal float*/
+    
+    /*checking if original float is +/-*/
+    CMP R2, 0
+    BLT neg_inf
+    /*if less than 0, then negative*/
+    
+    /*
+	moving down if it was greater than 0,
+	1 if floating point value is +infinity 
+	*/
+    pos_inf:
+	MOV R0, 1
+	B is_inf
+	
+    /*-1 if floating point value is -infinity */
+    neg_inf:
+	MOV R0, -1
+	B is_inf
+	
+    /*0 if floating point value is not +/- infinity */
+    not_inf:
+	MOV R0, 0
+	
+    is_inf:
+	POP {R4-R11, LR}
+	MOV PC, LR
 
     /* YOUR asmIsInf CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
    
@@ -217,7 +388,215 @@ asmFmax:
     /* DON'T FORGET TO FOLLOW THE CALLING CONVENTION!  */
 
     /* YOUR asmFmax CODE BELOW THIS LINE! VVVVVVVVVVVVVVVVVVVVV  */
-
+    PUSH {R4-R11, LR}
+    
+    /*storing actual float values*/
+    MOV R4, R0
+    MOV R5, R1
+    
+    /*then initialize them*/
+    BL initVariables
+    
+    /*storing floats into assigned memory */
+    LDR R2, =f0
+    STR R4, [R2]
+    
+    LDR R2, =f1
+    STR R5, [R2]
+    
+    /*unpacking f0
+    setting up r0 with address 
+     setting up r1 with destination address
+    */
+    LDR R0, =f0
+    LDR R1, =sb0
+    BL getSignBit
+    
+    LDR R0, =f0
+    BL getExponent
+    
+    LDR R2, =storedExp0
+    STR R0, [R2]
+    LDR R2, =realExp0
+    STR R1, [R2]
+    
+    LDR R0, =f0
+    BL getMantissa 
+    LDR R2, =mant0
+    STR R1, [R2]
+    
+    
+    /*unpacking f1
+    setting up r0 with address 
+     setting up r1 with destination address
+    */
+    LDR R0, =f1
+    LDR R1, =sb1
+    BL getSignBit
+    
+    LDR R0, =f1
+    BL getExponent
+    
+    LDR R2, =storedExp1
+    STR R0, [R2]
+    LDR R2, =realExp1
+    STR R1, [R2]
+    
+    LDR R0, =f1
+    BL getMantissa 
+    LDR R2, =mant1
+    STR R1, [R2]
+    
+    /*checking if r0 is infinity */
+    LDR R0, =f0
+    BL asmIsInf
+    
+    CMP R0, 1
+    BEQ f0_greater
+    
+    CMP R0, -1
+    BEQ f1_greater
+    
+    
+    /*checking if r1 is infinity */
+    LDR R0, =f1
+    BL asmIsInf
+    
+    CMP R0, 1
+    BEQ f1_greater
+    
+    CMP R0, -1
+    BEQ f0_greater
+    
+    /*getting sign bits*/
+    LDR R0, =sb0
+    LDR R2, [R0]
+    
+    LDR R1, =sb1
+    LDR R3, [R0]
+    
+    CMP R2, R3
+    BEQ check_exp
+    
+    CMP R2, 0
+    BEQ f0_greater
+    
+    B f1_greater
+    
+    check_exp:
+	LDR R0, =realExp0
+	LDR R4, [R0]
+	
+	LDR R0, =realExp1
+	LDR R5, [R0]
+	
+	CMP R4, R5
+	BEQ check_mant
+	
+	LDR R0, =sb0
+	LDR R2, [R0]
+	
+	CMP R2, 0 
+	BNE neg_exp
+	
+    pos_exp:
+	CMP R4, R5
+	BGT f0_greater
+	
+	B f1_greater
+	
+    neg_exp:
+	CMP R4, R5
+	BLT f0_greater
+	
+	B f1_greater
+	
+    check_mant:
+	LDR R0, =mant0
+	LDR R4, [R0]
+	
+	LDR R0, =mant1
+	LDR R5, [R0]
+	
+	CMP R4, R5
+	BEQ f0_greater
+	
+	LDR R0, =sb0
+	LDR R2, [R0]
+	CMP R2, 0
+	BNE neg_mant
+	
+    pos_mant:
+	CMP R4, R5
+	BGT f0_greater
+	
+	B f1_greater
+	
+    neg_mant:
+	CMP R4, R5
+	BLT f0_greater
+	
+	B f1_greater
+	
+    f0_greater:
+	LDR R0, =f0
+	LDR R1, [R0]
+	LDR R2, =fMax
+	STR R1, [R2]
+	
+	LDR R0, =sb0
+	LDR R1, [R0]
+	LDR R2, =sbMax
+	STR R1, [R2]
+	
+	LDR R0, =storedExp0
+	LDR R1, [R0]
+	LDR R2, =storedExpMax
+	STR R1, [R2]
+	
+	LDR R0, =realExp0
+	LDR R1, [R0]
+	LDR R2, =realExpMax
+	STR R1, [R2]
+	
+	LDR R0, =mant0
+	LDR R1, [R0]
+	LDR R2, =mantMax
+	STR R1, [R2]
+	
+	B final_str
+	
+    f1_greater:
+	LDR R0, =f1
+	LDR R1, [R0]
+	LDR R2, =fMax
+	STR R1, [R2]
+	
+	LDR R0, =sb1
+	LDR R1, [R0]
+	LDR R2, =sbMax
+	STR R1, [R2]
+	
+	LDR R0, =storedExp1
+	LDR R1, [R0]
+	LDR R2, =storedExpMax
+	STR R1, [R2]
+	
+	LDR R0, =realExp1
+	LDR R1, [R0]
+	LDR R2, =realExpMax
+	STR R1, [R2]
+	
+	LDR R0, =mant1
+	LDR R1, [R0]
+	LDR R2, =mantMax
+	STR R1, [R2]
+	
+    final_str:
+	LDR R0, =fMax
+	
+	    POP {R4-R11, LR}
+	    MOV PC, LR
     /* YOUR asmFmax CODE ABOVE THIS LINE! ^^^^^^^^^^^^^^^^^^^^^  */
 
    
