@@ -200,6 +200,8 @@ getExponent:
     /*real exponent */
     SUB R1, R2, 127 /*getting */
     
+    POP {R4-R11, LR}
+    MOV PC, LR
     /* YOUR getExponent CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
    
 
@@ -413,15 +415,18 @@ asmFmax:
     BL getSignBit
     
     LDR R0, =f0
-    BL getExponent
+    BL getExponent /*r0 = storedExp, r1 = realExp*/
     
+    /*unpacking exponent */
     LDR R2, =storedExp0
     STR R0, [R2]
     LDR R2, =realExp0
     STR R1, [R2]
     
+    /*unpacking mantissa*/
     LDR R0, =f0
     BL getMantissa 
+    /*r0 = mantissa, r1 = mantissa with 1 */
     LDR R2, =mant0
     STR R1, [R2]
     
@@ -435,37 +440,45 @@ asmFmax:
     BL getSignBit
     
     LDR R0, =f1
-    BL getExponent
+    BL getExponent /*r0 = storedExp, r1 = realExp*/
     
+    /*unpacking exponent*/
     LDR R2, =storedExp1
     STR R0, [R2]
     LDR R2, =realExp1
     STR R1, [R2]
     
+    /*unpacking manitssa */
     LDR R0, =f1
     BL getMantissa 
+    /*r0 = mantissa, r1 = mantissa with 1*/
     LDR R2, =mant1
     STR R1, [R2]
     
     /*checking if r0 is infinity */
     LDR R0, =f0
-    BL asmIsInf
+    BL asmIsInf /*getting -1, 0, 1*/
+    
     
     CMP R0, 1
+    /*if f0 = 1(positive inf) = f0 greater*/
     BEQ f0_greater
     
     CMP R0, -1
+    /*if f0 = -1(negative inf) = f1 is greater*/
     BEQ f1_greater
     
-    
+    /*we move on if f0 = 0*/
     /*checking if r1 is infinity */
     LDR R0, =f1
-    BL asmIsInf
+    BL asmIsInf /*getting -1, 0, 1*/
     
     CMP R0, 1
+    /*if f1 = 1(positive inf) = f1 greater*/
     BEQ f1_greater
     
     CMP R0, -1
+    /*if f1 = -1(negative inf) = f1 is greater*/
     BEQ f0_greater
     
     /*getting sign bits*/
@@ -473,14 +486,16 @@ asmFmax:
     LDR R2, [R0]
     
     LDR R1, =sb1
-    LDR R3, [R0]
+    LDR R3, [R1]
     
     CMP R2, R3
     BEQ check_exp
     
     CMP R2, 0
+    /*f0 = 0 , then postive and greater*/
     BEQ f0_greater
     
+    /*if not then f1 is greater*/
     B f1_greater
     
     check_exp:
@@ -491,26 +506,34 @@ asmFmax:
 	LDR R5, [R0]
 	
 	CMP R4, R5
+	/*if the same, need to check mantissa*/
 	BEQ check_mant
 	
 	LDR R0, =sb0
 	LDR R2, [R0]
 	
 	CMP R2, 0 
+	/*if not 0, then check with exponent is bigger*/
 	BNE neg_exp
 	
-    pos_exp:
+    /*if not negative then */
+    pos_exp: /*r4 = f0 exp, r5 = f1 exp*/
 	CMP R4, R5
+	/*if f0(r4) exp is greater then f1(r5) exp = f0 is greater */
 	BGT f0_greater
 	
+	/*if not then f1 greater*/
 	B f1_greater
 	
     neg_exp:
 	CMP R4, R5
+	/*if f0(r4)exp is less then f1(r5) exp = f0 is greater */
 	BLT f0_greater
 	
+	/*if not then f1 is greater*/
 	B f1_greater
 	
+    /*if exp was the same*/
     check_mant:
 	LDR R0, =mant0
 	LDR R4, [R0]
@@ -519,10 +542,13 @@ asmFmax:
 	LDR R5, [R0]
 	
 	CMP R4, R5
+	/*if they are equal then they are the same number*/
 	BEQ f0_greater
 	
 	LDR R0, =sb0
-	LDR R2, [R0]
+	LDR R2, [R0] /*get sign bit*/
+	
+	/*checking is sign bit is negative or positve*/
 	CMP R2, 0
 	BNE neg_mant
 	
@@ -538,6 +564,7 @@ asmFmax:
 	
 	B f1_greater
 	
+    /*storing is f0 is greater*/
     f0_greater:
 	LDR R0, =f0
 	LDR R1, [R0]
@@ -564,8 +591,9 @@ asmFmax:
 	LDR R2, =mantMax
 	STR R1, [R2]
 	
-	B final_str
+	B final_store
 	
+    /*storing if f1 is greater*/
     f1_greater:
 	LDR R0, =f1
 	LDR R1, [R0]
@@ -592,7 +620,7 @@ asmFmax:
 	LDR R2, =mantMax
 	STR R1, [R2]
 	
-    final_str:
+    final_store:
 	LDR R0, =fMax
 	
 	    POP {R4-R11, LR}
