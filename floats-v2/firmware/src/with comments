@@ -1,0 +1,615 @@
+/*** asmFmax.s   ***/
+
+.syntax unified
+
+/* Declare the following to be in data memory */
+.data  
+.align
+
+/* Define the globals so that the C code can access them */
+
+/* create a string */
+.global nameStr
+.type nameStr,%gnu_unique_object
+    
+/*** STUDENTS: Change the next line to your name!  **/
+nameStr: .asciz "Mariana Aguilar"  
+ 
+.align
+
+/* initialize a global variable that C can access to print the nameStr */
+.global nameStrPtr
+.type nameStrPtr,%gnu_unique_object
+nameStrPtr: .word nameStr   /* Assign the mem loc of nameStr to nameStrPtr */
+
+.global f0,f1,fMax,signBitMax,storedExpMax,realExpMax,mantMax
+.type f0,%gnu_unique_object
+.type f1,%gnu_unique_object
+.type fMax,%gnu_unique_object
+.type sbMax,%gnu_unique_object
+.type storedExpMax,%gnu_unique_object
+.type realExpMax,%gnu_unique_object
+.type mantMax,%gnu_unique_object
+
+.global sb0,sb1,storedExp0,storedExp1,realExp0,realExp1,mant0,mant1
+.type sb0,%gnu_unique_object
+.type sb1,%gnu_unique_object
+.type storedExp0,%gnu_unique_object
+.type storedExp1,%gnu_unique_object
+.type realExp0,%gnu_unique_object
+.type realExp1,%gnu_unique_object
+.type mant0,%gnu_unique_object
+.type mant1,%gnu_unique_object
+ 
+.align
+/* use these locations to store f0 values */
+f0: .word 0
+sb0: .word 0
+storedExp0: .word 0  /* the unmodified 8b exp value extracted from the float */
+realExp0: .word 0
+mant0: .word 0
+ 
+/* use these locations to store f1 values */
+f1: .word 0
+sb1: .word 0
+realExp1: .word 0
+storedExp1: .word 0  /* the unmodified 8b exp value extracted from the float */
+mant1: .word 0
+ 
+/* use these locations to store fMax values */
+fMax: .word 0
+sbMax: .word 0
+storedExpMax: .word 0
+realExpMax: .word 0
+mantMax: .word 0
+
+.global nanValue 
+.type nanValue,%gnu_unique_object
+nanValue: .word 0x7FFFFFFF            
+
+/* Tell the assembler that what follows is in instruction memory     */
+.text
+.align
+
+/********************************************************************
+ function name: initVariables
+    input:  none
+    output: initializes all f0*, f1*, and *Max varibales to 0
+********************************************************************/
+.global initVariables
+ .type initVariables,%function
+initVariables:
+    /* YOUR initVariables CODE BELOW THIS LINE! Don't forget to follow the calling convention! */
+    PUSH {R4-R11, LR}
+    
+    MOV R0, 0 //basically refreshing everything 
+    
+    /*resetting f0 */
+    LDR R1, =f0
+    STR R0, [R1]
+    
+    LDR R1, =sb0
+    STR R0, [R1]
+    
+    LDR R1, =storedExp0
+    STR R0, [R1]
+    
+    LDR R1, =realExp0
+    STR R0, [R1]
+    
+    LDR R1, =mant0
+    STR R0, [R1]
+    
+    /*resetting f1 */ 
+    LDR R1, =f1
+    STR R0, [R1]
+    
+    LDR R1, =sb1
+    STR R0, [R1]
+    
+    LDR R1, =storedExp1
+    STR R0, [R1]
+    
+    LDR R1, =realExp1
+    STR R0, [R1]
+    
+    LDR R1, =mant1
+    STR R0, [R1]
+    
+    /* resetting fMax */
+    LDR R1, =fMax
+    STR R0, [R1]
+    
+    LDR R1, =sbMax
+    STR R0, [R1]
+    
+    LDR R1, =storedExpMax
+    STR R0, [R1]
+    
+    LDR R1, =realExpMax
+    STR R0, [R1]
+    
+    LDR R1, =mantMax
+    STR R0, [R1]
+    
+    
+    POP {R4-R11, LR}
+    MOV PC, LR
+    /* YOUR initVariables CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
+
+    
+/********************************************************************
+ function name: getSignBit
+    input:  r0: address of mem containing 32b float to be unpacked
+            r1: address of mem to store sign bit (bit 31).
+                Store a 1 if the sign bit is negative,
+                Store a 0 if the sign bit is positive
+                use sb0, sb1, or signBitMax for storage, as needed
+    output: [r1]: mem location given by r1 contains the sign bit
+********************************************************************/
+.global getSignBit
+.type getSignBit,%function
+getSignBit:
+    /* YOUR getSignBit CODE BELOW THIS LINE! Don't forget to follow the calling convention! */
+    PUSH {R4-R11, LR}
+    
+    /*get float from r0*/
+    LDR R2, [R0]
+    
+    /*shift right to get sign bit */
+    LSR R2, R2, 31
+    
+    /*store sign (1 = negative, 0 = positive) */
+    STR R2, [R1]
+
+    
+    POP {R4-R11, LR}
+    MOV PC, LR
+    /* YOUR getSignBit CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
+    
+
+    
+/********************************************************************
+ function name: getExponent
+    input:  r0: address of mem containing 32b float to be unpacked
+      
+    output: r0: contains the unpacked original STORED exponent bits,
+                shifted into the lower 8b of the register. Range 0-255.
+            r1: always contains the REAL exponent, equal to r0 - 127.
+                It is a signed 32b value. This function does NOT
+                check for +/-Inf or +/-0, so r1 ALWAYS contains
+                r0 - 127.
+                
+********************************************************************/
+.global getExponent
+.type getExponent,%function
+getExponent:
+    /* YOUR getExponent CODE BELOW THIS LINE! Don't forget to follow the calling convention! */
+    PUSH {R4-R11, LR}
+    
+    /*getting float value from r0*/
+    LDR R2, [R0]
+    
+    /*get exponent */
+    LSL R2, R2, 1 /*lsl to drop sign bit*/
+    LSR R2, R2, 24 /*lsr to drop mantissa*/
+    
+    /*storing exponent into r0*/
+    MOV R0, R2 /*stored value*/
+    
+    /*real exponent */
+    SUB R1, R2, 127 /*getting */
+    
+    /* YOUR getExponent CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
+   
+
+    
+/********************************************************************
+ function name: getMantissa
+    input:  r0: address of mem containing 32b float to be unpacked
+      
+    output: r0: contains the mantissa WITHOUT the implied 1 bit added
+                to bit 23. The upper bits must all be set to 0.
+            r1: contains the mantissa WITH the implied 1 bit added
+                to bit 23. Upper bits are set to 0. 
+********************************************************************/
+.global getMantissa
+.type getMantissa,%function
+getMantissa:
+    /* YOUR getMantissa CODE BELOW THIS LINE! Don't forget to follow the calling convention! */
+    PUSH {R4-R11, LR}
+    
+    /*getting float from address */
+    LDR R2, [R0]
+    
+    
+    LSL R2, R2, 9 /*moving left 9 to drop sign and exponent */
+    
+    LSR R2, R2, 9 /* moving right 9 to move mantissa to lsb*/
+    
+    MOV R0, R2 /* mantissa without the implited 1 bit*/ 
+    
+    /*sets 1 to the left of the mantissa*/
+    MOV R3, 1
+    LSL R3, R3, 23
+    
+    ADD R1, R2, R3 /*mantissa with 1 in bit 23*/
+    
+    
+    POP {R4-R11, LR}
+    MOV PC, LR
+    /* YOUR getMantissa CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
+   
+
+
+    
+/********************************************************************
+ function name: asmIsZero
+    input:  r0: address of mem containing 32b float to be checked
+                for +/- 0
+      
+    output: r0:  0 if floating point value is NOT +/- 0
+                 1 if floating point value is +0
+                -1 if floating point value is -0
+      
+********************************************************************/
+.global asmIsZero
+.type asmIsZero,%function
+asmIsZero:
+    /* YOUR asmIsZero CODE BELOW THIS LINE! Don't forget to follow the calling convention! */
+    PUSH {R4-R11, LR}
+    
+    LDR R2, [R0] /*getting float*/
+    
+    LSL R3, R2, 1 /*moving the sign bit*/
+    
+    /*checking if the rest is 0*/
+    CMP R3, 0
+    /*if there is a number*/
+    BNE not_zero
+    
+    /*it is a zero*/
+    CMP R2, 0
+    /*positive zero if it was always 0*/
+    BEQ pos_zero
+    /*moving down if not equal*/
+    /*-1 if floating point value is -0*/
+    neg_zero:
+	MOV R0, -1
+	B is_zero
+	
+    /*1 is floating point value is +0*/
+    pos_zero:
+	MOV R0, 1
+	B is_zero
+	
+    /*0 if not a +/- 0 */
+    not_zero:
+	MOV R0, 0
+	
+    is_zero:
+	POP {R4-R11, LR}
+	MOV PC, LR
+    
+    /* YOUR asmIsZero CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
+   
+
+
+    
+/********************************************************************
+ function name: asmIsInf
+    input:  r0: address of mem containing 32b float to be checked
+                for +/- infinity
+      
+    output: r0:  0 if floating point value is NOT +/- infinity
+                 1 if floating point value is +infinity
+                -1 if floating point value is -infinity
+      
+********************************************************************/
+.global asmIsInf
+.type asmIsInf,%function
+asmIsInf:
+    /* YOUR asmIsInf CODE BELOW THIS LINE! Don't forget to follow the calling convention! */
+    PUSH {R4-R11, LR}
+    
+    LDR R2, [R0]/*getting float*/
+    
+    LSL R3, R2, 1 /*moving the sign bit off*/
+    
+    LDR R4, =0xFF000000 /*setting an infinity register*/
+    
+    CMP R4, R3
+    BNE not_inf
+    /*not equal is normal float*/
+    
+    /*checking if original float is +/-*/
+    CMP R2, 0
+    BLT neg_inf
+    /*if less than 0, then negative*/
+    
+    /*
+	moving down if it was greater than 0,
+	1 if floating point value is +infinity 
+	*/
+    pos_inf:
+	MOV R0, 1
+	B is_inf
+	
+    /*-1 if floating point value is -infinity */
+    neg_inf:
+	MOV R0, -1
+	B is_inf
+	
+    /*0 if floating point value is not +/- infinity */
+    not_inf:
+	MOV R0, 0
+	
+    is_inf:
+	POP {R4-R11, LR}
+	MOV PC, LR
+
+    /* YOUR asmIsInf CODE ABOVE THIS LINE! Don't forget to follow the calling convention! */
+   
+
+
+    
+/********************************************************************
+function name: asmFmax
+function description:
+     max = asmFmax ( f0 , f1 )
+     
+where:
+     f0, f1 are 32b floating point values passed in by the C caller
+     max is the ADDRESS of fMax, where the greater of (f0,f1) must be stored
+     
+     if f0 equals f1, return either one
+     notes:
+        "greater than" means the most positive number.
+        For example, -1 is greater than -200
+     
+     The function must also unpack the greater number and update the 
+     following global variables prior to returning to the caller:
+     
+     signBitMax: 0 if the larger number is positive, otherwise 1
+     realExpMax: The REAL exponent of the max value, adjusted for
+                 (i.e. the STORED exponent - (127 o 126), see lab instructions)
+                 The value must be a signed 32b number
+     mantMax:    The lower 23b unpacked from the larger number.
+                 If not +/-INF and not +/- 0, the mantissa MUST ALSO include
+                 the implied "1" in bit 23! (So the student's code
+                 must make sure to set that bit).
+                 All bits above bit 23 must always be set to 0.     
+
+********************************************************************/    
+.global asmFmax
+.type asmFmax,%function
+asmFmax:   
+
+    /* DON'T FORGET TO FOLLOW THE CALLING CONVENTION!  */
+
+    /* YOUR asmFmax CODE BELOW THIS LINE! VVVVVVVVVVVVVVVVVVVVV  */
+    PUSH {R4-R11, LR}
+    
+    /*storing actual float values*/
+    MOV R4, R0
+    MOV R5, R1
+    
+    /*then initialize them*/
+    BL initVariables
+    
+    /*storing floats into assigned memory */
+    LDR R2, =f0
+    STR R4, [R2]
+    
+    LDR R2, =f1
+    STR R5, [R2]
+    
+    /*unpacking f0
+    setting up r0 with address 
+     setting up r1 with destination address
+    */
+    LDR R0, =f0
+    LDR R1, =sb0
+    BL getSignBit
+    
+    LDR R0, =f0
+    BL getExponent /*r0 = storedExp and r1 = realExp */
+
+    /* unpacking exponent */
+    LDR R2, =storedExp0
+    STR R0, [R2]
+    LDR R2, =realExp0
+    STR R1, [R2]
+
+    /* unpacking mantissa */
+    LDR R0, =f0
+    BL getMantissa 
+ /* r0 = mantissa, r1 = mantissa with 1 */
+    LDR R2, =mant0
+    STR R1, [R2]
+    
+    
+    /*unpacking f1
+    setting up r0 with address 
+     setting up r1 with destination address
+    */
+    LDR R0, =f1
+    LDR R1, =sb1
+    BL getSignBit
+    
+    LDR R0, =f1
+    BL getExponent /*r0 = storedExp and r1 = realExp */
+
+    /* unpacking exponent */
+    LDR R2, =storedExp1
+    STR R0, [R2]
+    LDR R2, =realExp1
+    STR R1, [R2]
+
+    /* unpacking mantissa */
+    LDR R0, =f1
+    BL getMantissa 
+    /* r0 = mantissa, r1 = mantissa with 1 */
+    LDR R2, =mant1
+    STR R1, [R2]
+    
+    /*checking if f0 is infinity */
+    LDR R0, =f0
+    BL asmIsInf
+    
+    CMP R0, 1
+    BEQ f0_greater 
+    /*if f0 is greater that 1, then +inf, f0 is greater*/
+    
+    CMP R0, -1
+    BEQ f1_greater
+    
+    
+    /*checking if f1 is infinity */
+    LDR R0, =f1
+    BL asmIsInf
+    
+    CMP R0, 1
+    BEQ f1_greater
+    
+    CMP R0, -1
+    BEQ f0_greater
+    
+    /*getting sign bits*/
+    LDR R0, =sb0
+    LDR R2, [R0]
+    
+    LDR R1, =sb1
+    LDR R3, [R0]
+    
+    CMP R2, R3
+    BEQ check_exp
+    
+    CMP R2, 0
+    BEQ f0_greater
+    
+    B f1_greater
+    
+    check_exp:
+	LDR R0, =realExp0
+	LDR R4, [R0]
+	
+	LDR R0, =realExp1
+	LDR R5, [R0]
+	
+	CMP R4, R5
+	BEQ check_mant
+	
+	LDR R0, =sb0
+	LDR R2, [R0]
+	
+	CMP R2, 0 
+	BNE neg_exp
+	
+    pos_exp:
+	CMP R4, R5
+	BGT f0_greater
+	
+	B f1_greater
+	
+    neg_exp:
+	CMP R4, R5
+	BLT f0_greater
+	
+	B f1_greater
+	
+    check_mant:
+	LDR R0, =mant0
+	LDR R4, [R0]
+	
+	LDR R0, =mant1
+	LDR R5, [R0]
+	
+	CMP R4, R5
+	BEQ f0_greater
+	
+	LDR R0, =sb0
+	LDR R2, [R0]
+	CMP R2, 0
+	BNE neg_mant
+	
+    pos_mant:
+	CMP R4, R5
+	BGT f0_greater
+	
+	B f1_greater
+	
+    neg_mant:
+	CMP R4, R5
+	BLT f0_greater
+	
+	B f1_greater
+	
+    f0_greater:
+	LDR R0, =f0
+	LDR R1, [R0]
+	LDR R2, =fMax
+	STR R1, [R2]
+	
+	LDR R0, =sb0
+	LDR R1, [R0]
+	LDR R2, =sbMax
+	STR R1, [R2]
+	
+	LDR R0, =storedExp0
+	LDR R1, [R0]
+	LDR R2, =storedExpMax
+	STR R1, [R2]
+	
+	LDR R0, =realExp0
+	LDR R1, [R0]
+	LDR R2, =realExpMax
+	STR R1, [R2]
+	
+	LDR R0, =mant0
+	LDR R1, [R0]
+	LDR R2, =mantMax
+	STR R1, [R2]
+	
+	B final_str
+	
+    f1_greater:
+	LDR R0, =f1
+	LDR R1, [R0]
+	LDR R2, =fMax
+	STR R1, [R2]
+	
+	LDR R0, =sb1
+	LDR R1, [R0]
+	LDR R2, =sbMax
+	STR R1, [R2]
+	
+	LDR R0, =storedExp1
+	LDR R1, [R0]
+	LDR R2, =storedExpMax
+	STR R1, [R2]
+	
+	LDR R0, =realExp1
+	LDR R1, [R0]
+	LDR R2, =realExpMax
+	STR R1, [R2]
+	
+	LDR R0, =mant1
+	LDR R1, [R0]
+	LDR R2, =mantMax
+	STR R1, [R2]
+	
+    final_str:
+	LDR R0, =fMax
+	
+	    POP {R4-R11, LR}
+	    MOV PC, LR
+    /* YOUR asmFmax CODE ABOVE THIS LINE! ^^^^^^^^^^^^^^^^^^^^^  */
+
+   
+
+/**********************************************************************/   
+.end  /* The assembler will not process anything after this directive!!! */
+           
+
+
